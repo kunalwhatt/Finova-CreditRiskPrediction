@@ -4,10 +4,16 @@ import shap
 import matplotlib.pyplot as plt
 from datetime import date
 from io import BytesIO
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib.pagesizes import letter
 import tempfile
+
+# ---------------- SAFE IMPORTS ----------------
+try:
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.pagesizes import letter
+    REPORTLAB_AVAILABLE = True
+except:
+    REPORTLAB_AVAILABLE = False
 
 from src.data_preprocessing import basic_cleaning, encode_categorical
 from src.feature_engineering import create_features
@@ -21,6 +27,7 @@ st.set_page_config(page_title="Finova", layout="wide")
 st.markdown("""
 <style>
 body {background-color: #f8fafc;}
+
 .card {
     background: white;
     padding: 20px;
@@ -28,9 +35,11 @@ body {background-color: #f8fafc;}
     box-shadow: 0 4px 20px rgba(0,0,0,0.05);
     text-align:center;
 }
+
 .green {color:#16a34a;font-weight:700;}
 .yellow {color:#ca8a04;font-weight:700;}
 .red {color:#dc2626;font-weight:700;}
+
 .reason-box {
     background: #ffffff;
     padding:15px;
@@ -126,19 +135,26 @@ if st.button("Run Risk Assessment"):
     st.progress(float(prob))
 
     # ---------- SHAP ----------
-    explainer = shap.Explainer(model)
-    shap_values = explainer(input_encoded)
+    try:
+        explainer = shap.Explainer(model)
+        shap_values = explainer(input_encoded)
+        shap_ok = True
+    except:
+        shap_ok = False
 
     st.subheader("Key Reasons")
 
-    vals = shap_values[0].values
-    features = input_encoded.columns
+    if shap_ok:
+        vals = shap_values[0].values
+        features = input_encoded.columns
 
-    importance = sorted(
-        zip(features, vals),
-        key=lambda x: abs(x[1]),
-        reverse=True
-    )[:5]
+        importance = sorted(
+            zip(features, vals),
+            key=lambda x: abs(x[1]),
+            reverse=True
+        )[:5]
+    else:
+        importance = []
 
     reasons = []
     for f, v in importance:
@@ -146,14 +162,17 @@ if st.button("Run Risk Assessment"):
         reasons.append(reason)
         st.markdown(f"<div class='reason-box'>{reason}</div>", unsafe_allow_html=True)
 
-    # ---------- CHART ----------
-    fig, ax = plt.subplots()
-    shap.plots.bar(shap_values[0], show=False)
-    st.pyplot(fig)
+    if not reasons:
+        st.info("Basic rule-based insights applied.")
 
-    # Save chart for PDF
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-    fig.savefig(tmp.name)
+    # ---------- CHART ----------
+    if shap_ok:
+        fig, ax = plt.subplots()
+        shap.plots.bar(shap_values[0], show=False)
+        st.pyplot(fig)
+
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+        fig.savefig(tmp.name)
 
     # ---------- CSV ----------
     result_df = pd.DataFrame([{
@@ -166,32 +185,37 @@ if st.button("Run Risk Assessment"):
     st.download_button("Download CSV", result_df.to_csv(index=False), "result.csv")
 
     # ---------- PDF ----------
-    def create_pdf():
-        buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter)
-        styles = getSampleStyleSheet()
+    if REPORTLAB_AVAILABLE:
 
-        content = [
-            Paragraph("Finova Loan Report", styles['Title']),
-            Spacer(1,12),
-            Paragraph(f"Name: {name}", styles['Normal']),
-            Paragraph(f"PD: {prob:.2f}", styles['Normal']),
-            Paragraph(f"Risk: {risk}", styles['Normal']),
-            Paragraph(f"Decision: {decision}", styles['Normal']),
-            Spacer(1,12),
-            Paragraph("Key Reasons:", styles['Heading2'])
-        ]
+        def create_pdf():
+            buffer = BytesIO()
+            doc = SimpleDocTemplate(buffer, pagesize=letter)
+            styles = getSampleStyleSheet()
 
-        for r in reasons:
-            content.append(Paragraph(r, styles['Normal']))
+            content = [
+                Paragraph("Finova Loan Report", styles['Title']),
+                Spacer(1,12),
+                Paragraph(f"Name: {name}", styles['Normal']),
+                Paragraph(f"PD: {prob:.2f}", styles['Normal']),
+                Paragraph(f"Risk: {risk}", styles['Normal']),
+                Paragraph(f"Decision: {decision}", styles['Normal']),
+                Spacer(1,12),
+                Paragraph("Key Reasons:", styles['Heading2'])
+            ]
 
-        content.append(Spacer(1,12))
-        content.append(Image(tmp.name, width=400, height=200))
+            for r in reasons:
+                content.append(Paragraph(r, styles['Normal']))
 
-        doc.build(content)
-        buffer.seek(0)
-        return buffer
+            if shap_ok:
+                content.append(Spacer(1,12))
+                content.append(Image(tmp.name, width=400, height=200))
 
-    pdf = create_pdf()
+            doc.build(content)
+            buffer.seek(0)
+            return buffer
 
-    st.download_button("Download PDF Report", pdf, "loan_report.pdf")
+        pdf = create_pdf()
+        st.download_button("Download PDF Report", pdf, "loan_report.pdf")
+
+    else:
+        st.warning("PDF export not available (install reportlab to enable)")
