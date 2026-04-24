@@ -1,0 +1,15 @@
+erDiagram
+    LOAN_FACT }o--|| APPLICANT_DIM : has
+    LOAN_FACT }o--|| TIME_DIM : occurs_on
+    APPLICANT_DIM ||--|| CREDIT_DIM : has
+    APPLICANT_DIM ||--|| DEVICE_DIM : has
+
+    LOAN_FACT {
+        int loan_id
+        int applicant_id
+        int time_id
+        float loan_amount
+        float emi
+        int default_flag
+        float pd_score
+    }

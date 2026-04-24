@@ -1,0 +1,14 @@
+flowchart LR
+    A[Data Sources] --> B[Ingestion & Validation]
+    B --> C[Preprocessing]
+    C --> D[Feature Engineering]
+    D --> E[Train/Validation Split]
+    E --> F[Model Training]
+    F --> G[Evaluation]
+    G --> H[Threshold & Risk Bands]
+    H --> I[Explainability]
+    I --> J[Decision Engine]
+    J --> K{Outcome}
+    K -->|Low| L[Approve]
+    K -->|Medium| M[Manual Review]
+    K -->|High| N[Reject]

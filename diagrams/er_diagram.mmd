@@ -1,0 +1,5 @@
+erDiagram
+    APPLICANT_DIM ||--o{ LOAN_FACT : applies
+    APPLICANT_DIM ||--|| CREDIT_DIM : owns
+    APPLICANT_DIM ||--|| DEVICE_DIM : uses
+    TIME_DIM ||--o{ LOAN_FACT : timestamps
